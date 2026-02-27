@@ -2,6 +2,8 @@ import { Command } from 'commander';
 import { createInitCommand } from './commands/init.js';
 import { createCaptureCommand } from './commands/capture.js';
 import { createShowCommand } from './commands/show.js';
+import { installHooksCommand } from './commands/install-hooks.js';
+import { uninstallHooksCommand } from './commands/uninstall-hooks.js';
 import { logger, LogLevel } from '../utils/logger.js';
 
 const program = new Command();
@@ -25,13 +27,14 @@ program
 program.addCommand(createInitCommand());
 program.addCommand(createCaptureCommand());
 program.addCommand(createShowCommand());
+program.addCommand(installHooksCommand);
+program.addCommand(uninstallHooksCommand);
 
 // TODO: Add more commands
 // program.addCommand(createListCommand());
 // program.addCommand(createQueryCommand());
 // program.addCommand(createStatsCommand());
 // program.addCommand(createDashboardCommand());
-// program.addCommand(createHooksCommand());
 // program.addCommand(createExportCommand());
 
 // Parse command line arguments

@@ -7,7 +7,8 @@
     "commitledger": "./dist/index.mjs"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && npm run copy-hooks",
+    "copy-hooks": "mkdir -p dist/hooks/templates && cp hooks/templates/post-commit dist/hooks/templates/",
     "dev": "tsup --watch",
     "test": "jest",
     "test:unit": "jest --testPathPattern=tests/unit",

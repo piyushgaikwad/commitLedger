@@ -1,0 +1,7 @@
+#!/bin/sh
+# commitledger post-commit hook
+# Auto-capture AI commit receipts
+
+# Try to capture receipt for the commit
+# Use || true to ensure hook doesn't fail the commit
+commitledger capture HEAD --quiet || true
