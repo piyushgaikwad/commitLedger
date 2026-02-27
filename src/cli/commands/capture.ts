@@ -4,6 +4,9 @@ import { MetadataBranchManager } from '../../git/metadata-branch.js';
 import { receiptGenerator } from '../../receipt/generator.js';
 import { logger } from '../../utils/logger.js';
 import { ensureGitRepository, handleCommandError } from '../utils.js';
+import { sessionOrchestrator } from '../../ingestion/orchestrator.js';
+import { matchingEngine } from '../../matching/engine.js';
+import { calculateDetailedScore } from '../../matching/scoring.js';
 
 export function createCaptureCommand(): Command {
   const command = new Command('capture');
@@ -53,12 +56,63 @@ async function captureCommand(
     `Files changed: ${diffSummary.filesChanged}, +${diffSummary.insertions} -${diffSummary.deletions}`
   );
 
-  // TODO: In future, integrate session ingestion and matching here
-  // For now, create a human receipt (no AI detected)
-  const receipt = receiptGenerator.generateHumanReceipt(
-    commitContext,
-    diffSummary
-  );
+  // AI Detection: Try to match commit to AI session
+  let receipt;
+  try {
+    logger.debug('Attempting to detect AI agent...');
+
+    // Get repository root for workspace matching
+    const repoRoot = await repo.getRepositoryRoot();
+
+    // Get recent sessions (last 24 hours)
+    const sessions = await sessionOrchestrator.getRecentSessions(24);
+    logger.debug(`Found ${sessions.length} recent AI sessions`);
+
+    if (sessions.length > 0) {
+      // Try to match commit to a session
+      const matchResult = await matchingEngine.matchCommit(
+        commitContext,
+        sessions,
+        repoRoot
+      );
+
+      if (matchResult.session && matchResult.confidence_score >= 0.6) {
+        // AI-assisted commit detected
+        receipt = receiptGenerator.generateAIReceipt(
+          commitContext,
+          diffSummary,
+          matchResult.session.agent_type,
+          matchResult.session.session_id,
+          matchResult.confidence_score
+        );
+
+        logger.debug(
+          `AI agent detected: ${matchResult.session.agent_type} (${(matchResult.confidence_score * 100).toFixed(1)}%)`
+        );
+      } else {
+        // No confident match - human commit
+        receipt = receiptGenerator.generateHumanReceipt(
+          commitContext,
+          diffSummary
+        );
+        logger.debug('No AI agent detected (low confidence or no match)');
+      }
+    } else {
+      // No sessions found - human commit
+      receipt = receiptGenerator.generateHumanReceipt(
+        commitContext,
+        diffSummary
+      );
+      logger.debug('No AI sessions found');
+    }
+  } catch (error) {
+    // Fallback to human receipt on error
+    logger.debug(`AI detection error: ${error}`);
+    receipt = receiptGenerator.generateHumanReceipt(
+      commitContext,
+      diffSummary
+    );
+  }
 
   // Store receipt
   await metadataBranch.storeReceipt(commitContext.sha, receipt);
@@ -69,7 +123,7 @@ async function captureCommand(
     logger.info('No AI agent detected for this commit');
   } else {
     logger.info(
-      `AI Agent: ${receipt.agent_metadata.agent_type} (confidence: ${receipt.agent_metadata.confidence_score.toFixed(2)})`
+      `AI Agent: ${receipt.agent_metadata.agent_type} (confidence: ${(receipt.agent_metadata.confidence_score * 100).toFixed(1)}%)`
     );
   }
 }
