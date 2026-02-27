@@ -43,10 +43,11 @@ export class MatchingEngine {
   async matchCommit(
     commit: CommitContext,
     sessions: Session[],
-    workspacePath: string
+    workspacePath: string,
+    commitFiles: string[] = []
   ): Promise<MatchResult> {
     logger.debug(
-      `Matching commit ${commit.shortSha} with ${sessions.length} sessions`
+      `Matching commit ${commit.shortSha} (${commitFiles.length} files) with ${sessions.length} sessions`
     );
 
     // Phase 1: Repository isolation filter
@@ -80,7 +81,8 @@ export class MatchingEngine {
     // Phase 3: Score all remaining sessions
     const scoredSessions = this.scoreAllSessions(
       commit,
-      timeSessions
+      timeSessions,
+      commitFiles
     );
 
     // Phase 4: Find best match above threshold
@@ -149,18 +151,12 @@ export class MatchingEngine {
    */
   private scoreAllSessions(
     commit: CommitContext,
-    sessions: Session[]
+    sessions: Session[],
+    commitFiles: string[]
   ): ScoredSession[] {
-    const commitFiles = commit.shortSha
-      ? [] // We'll get this from getDiffSummary in the caller
-      : [];
-
     return sessions.map((session) => {
-      // Note: commit files should be passed from the caller
-      // For now, we'll calculate score with empty files
-      // This will be populated when integrated with capture command
       const details = calculateDetailedScore(
-        [], // Will be filled by caller
+        commitFiles,
         commit.timestamp,
         session.referenced_files,
         session.timestamp,

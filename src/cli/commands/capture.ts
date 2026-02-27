@@ -73,7 +73,8 @@ async function captureCommand(
       const matchResult = await matchingEngine.matchCommit(
         commitContext,
         sessions,
-        repoRoot
+        repoRoot,
+        diffSummary.changedFiles
       );
 
       if (matchResult.session && matchResult.confidence_score >= 0.6) {
