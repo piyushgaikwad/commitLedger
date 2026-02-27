@@ -30,10 +30,22 @@ async function showCommand(
   const repo = new GitRepository();
   await ensureGitRepository(repo);
 
+  // Resolve HEAD or branch names to actual SHA
+  let resolvedSha = sha;
+  if (sha === 'HEAD' || sha.includes('/') || !/^[0-9a-f]+$/i.test(sha)) {
+    try {
+      const commitContext = await repo.getCommitContext(sha);
+      resolvedSha = commitContext.sha;
+    } catch (error) {
+      logger.error(`Could not resolve '${sha}' to a commit`);
+      process.exit(1);
+    }
+  }
+
   const metadataBranch = new MetadataBranchManager(repo);
 
   // Retrieve receipt
-  const receipt = await metadataBranch.retrieveReceipt(sha);
+  const receipt = await metadataBranch.retrieveReceipt(resolvedSha);
 
   if (!receipt) {
     logger.error(`No receipt found for commit ${sha}`);

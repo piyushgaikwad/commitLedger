@@ -43,10 +43,33 @@ export class GitRepository {
   }
 
   /**
+   * Checks if the repository is empty (no commits)
+   */
+  async isEmptyRepository(): Promise<boolean> {
+    try {
+      await this.git.revparse(['HEAD']);
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
    * Gets the current branch name
    */
   async getCurrentBranch(): Promise<string> {
     try {
+      // Check if repository is empty
+      if (await this.isEmptyRepository()) {
+        // In empty repos, try to get the branch name from symbolic ref
+        try {
+          const ref = await this.git.raw(['symbolic-ref', '--short', 'HEAD']);
+          return ref.trim();
+        } catch {
+          return 'main'; // Default branch name
+        }
+      }
+
       const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
       return branch.trim();
     } catch (error) {
@@ -87,12 +110,22 @@ export class GitRepository {
    */
   async getDiffSummary(sha: string = 'HEAD'): Promise<DiffSummary> {
     try {
-      // Get diff against parent commit
-      const diff: DiffResult = await this.git.diff([
-        '--numstat',
-        `${sha}^`,
-        sha,
-      ]);
+      // Check if this is a root commit (no parent)
+      let isRootCommit = false;
+      try {
+        await this.git.revparse([`${sha}^`]);
+      } catch {
+        isRootCommit = true;
+      }
+
+      let diff: DiffResult;
+      if (isRootCommit) {
+        // For root commits, diff against empty tree
+        diff = await this.git.diff(['--numstat', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', sha]);
+      } else {
+        // For regular commits, diff against parent
+        diff = await this.git.diff(['--numstat', `${sha}^`, sha]);
+      }
 
       const lines = diff.split('\n').filter((line) => line.trim());
       const changedFiles: string[] = [];
@@ -119,8 +152,8 @@ export class GitRepository {
         changedFiles,
       };
     } catch (error) {
-      logger.warn(`Failed to get diff summary for ${sha}: ${error}`);
-      // Return empty diff if it fails (e.g., initial commit with no parent)
+      logger.debug(`Failed to get diff summary for ${sha}: ${error}`);
+      // Return empty diff if it fails
       return {
         filesChanged: 0,
         insertions: 0,
