@@ -1,0 +1,64 @@
+{
+  "name": "@salesforce/commitledger",
+  "version": "0.1.0",
+  "description": "AI Commit Ledger - Track AI-assisted development with structured receipts",
+  "main": "dist/index.js",
+  "bin": {
+    "commitledger": "./dist/index.mjs"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:watch": "jest --watch",
+    "coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "git",
+    "ai",
+    "claude",
+    "cursor",
+    "commit",
+    "ledger",
+    "governance",
+    "cli"
+  ],
+  "author": "Piyush Gaikwad <piyush.gaikwad@salesforce.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "simple-git": "^3.25.0",
+    "commander": "^12.0.0",
+    "zod": "^3.23.0",
+    "chalk": "^5.3.0",
+    "cosmiconfig": "^9.0.0",
+    "express": "^4.19.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/jest": "^29.5.12",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.5",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  }
+}
