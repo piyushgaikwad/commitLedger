@@ -59,11 +59,7 @@ export class GitRepository {
    */
   async getCommitContext(sha: string = 'HEAD'): Promise<CommitContext> {
     try {
-      const log = await this.git.log({
-        from: sha,
-        to: sha,
-        maxCount: 1,
-      });
+      const log = await this.git.log(['-1', sha]);
 
       if (!log.latest) {
         throw new Error(`Commit ${sha} not found`);
