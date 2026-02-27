@@ -24,6 +24,13 @@
 - 🎨 **Beautiful CLI** - Colored terminal output with JSON export option
 - ✅ **Works Everywhere** - Empty repos, existing repos, root commits - all supported
 
+
+Scenario	Detection
+Claude edits files, YOU commit them ->	✅ Detected (high confidence)
+Claude commits files itself	-> ✅ Detected (high confidence)
+YOU edit files Claude never touched ->	❌ Not detected
+Mix of Claude + your files	-> ⚠️ Partial (medium confidence)
+
 ---
 
 ## Installation
