@@ -342,9 +342,7 @@ commitledger capture HEAD
 # View receipt
 commitledger show HEAD
 ```
-
 ---
-
 ### Workflow 3: Bulk Capture (Multiple Commits)
 
 ```bash
@@ -642,7 +640,3 @@ A: Yes! Use `commitledger init --branch custom-name`.
 - **Issues**: Report bugs at [GitHub Issues](https://github.com/salesforce/commitLedger/issues)
 - **Documentation**: [README.md](README.md)
 - **Architecture**: [docs/architecture.md](docs/architecture.md)
-
----
-
-**Built with ❤️ by Piyush Gaikwad @ Salesforce**
