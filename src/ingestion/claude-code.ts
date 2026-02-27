@@ -3,12 +3,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
 import { logger } from '../utils/logger.js';
-import {
-  Session,
-  SessionParser,
-  ClaudeConversation,
-  ClaudeMessage,
-} from './types.js';
+import { Session, SessionParser } from './types.js';
 
 export class ClaudeCodeParser implements SessionParser {
   private storagePath: string;
@@ -67,33 +62,22 @@ export class ClaudeCodeParser implements SessionParser {
     const sessions: Session[]= [];
 
     try {
-      // Get workspace path from project metadata
-      const workspacePath = await this.getWorkspacePath(projectPath);
+      // Read all files in project directory
+      const files = await fs.readdir(projectPath);
 
-      // Parse conversations
-      const conversationsDir = join(projectPath, 'conversations');
-      try {
-        const conversations = await fs.readdir(conversationsDir);
+      // Find all .jsonl files (session files)
+      const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
 
-        for (const convFile of conversations) {
-          if (!convFile.endsWith('.json')) continue;
-
-          try {
-            const convPath = join(conversationsDir, convFile);
-            const session = await this.parseConversation(
-              convPath,
-              workspacePath,
-              projectHash
-            );
-            if (session) {
-              sessions.push(session);
-            }
-          } catch (error) {
-            logger.debug(`Error parsing conversation ${convFile}: ${error}`);
+      for (const jsonlFile of jsonlFiles) {
+        try {
+          const sessionPath = join(projectPath, jsonlFile);
+          const session = await this.parseJSONLSession(sessionPath, projectHash);
+          if (session) {
+            sessions.push(session);
           }
+        } catch (error) {
+          logger.debug(`Error parsing session ${jsonlFile}: ${error}`);
         }
-      } catch {
-        // No conversations directory
       }
     } catch (error) {
       logger.debug(`Error parsing project ${projectHash}: ${error}`);
@@ -102,120 +86,116 @@ export class ClaudeCodeParser implements SessionParser {
     return sessions;
   }
 
-  private async getWorkspacePath(projectPath: string): Promise<string> {
-    try {
-      // Try to read project metadata
-      const metadataPath = join(projectPath, 'metadata.json');
-      const metadataContent = await fs.readFile(metadataPath, 'utf8');
-      const metadata = JSON.parse(metadataContent);
-      return metadata.workspace_path || projectPath;
-    } catch {
-      // Fallback: use project path
-      return projectPath;
-    }
-  }
-
-  private async parseConversation(
-    convPath: string,
-    workspacePath: string,
+  /**
+   * Parse a single JSONL session file
+   * Format: One JSON event per line
+   */
+  private async parseJSONLSession(
+    sessionPath: string,
     projectHash: string
   ): Promise<Session | null> {
     try {
-      const content = await fs.readFile(convPath, 'utf8');
-      const conversation: ClaudeConversation = JSON.parse(content);
+      const content = await fs.readFile(sessionPath, 'utf8');
+      const lines = content.split('\n').filter(l => l.trim());
 
-      // Extract referenced files from tool uses and messages
-      const referencedFiles = this.extractReferencedFiles(conversation);
+      if (lines.length === 0) {
+        return null;
+      }
 
-      // Get timestamp (last message or conversation updated_at)
-      const timestamp = this.getTimestamp(conversation);
+      // Extract data from events
+      let sessionId = '';
+      let workspacePath = '';
+      const referencedFiles = new Set<string>();
+      let lastTimestamp: Date = new Date();
+      const eventContent: string[] = [];
+
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line);
+
+          // Extract session ID (first occurrence)
+          if (!sessionId && event.sessionId) {
+            sessionId = event.sessionId;
+          }
+
+          // Extract workspace path from cwd
+          if (!workspacePath && event.cwd) {
+            workspacePath = event.cwd;
+          }
+
+          // Extract timestamp
+          if (event.timestamp) {
+            lastTimestamp = new Date(event.timestamp);
+          }
+
+          // Process assistant messages that contain tool uses
+          if (event.type === 'assistant' && event.message?.content) {
+            const content = Array.isArray(event.message.content)
+              ? event.message.content
+              : [event.message.content];
+
+            for (const item of content) {
+              // Check if this content item is a tool_use
+              if (item.type === 'tool_use' && ['Read', 'Write', 'Edit'].includes(item.name)) {
+                const filePath = item.input?.file_path;
+                if (filePath) {
+                  referencedFiles.add(filePath);
+                }
+              }
+            }
+          }
+
+          // Collect content for hash (text and user messages)
+          if (event.type === 'text' && event.message?.text) {
+            const text = String(event.message.text);
+            eventContent.push(text);
+          } else if (event.type === 'user' && event.message?.content) {
+            const content = typeof event.message.content === 'string'
+              ? event.message.content
+              : JSON.stringify(event.message.content);
+            eventContent.push(content);
+          }
+        } catch (parseError) {
+          // Skip malformed lines
+          logger.debug(`Skipping malformed JSONL line: ${parseError}`);
+        }
+      }
+
+      // Must have at least a session ID
+      if (!sessionId) {
+        logger.debug(`No session ID found in ${sessionPath}`);
+        return null;
+      }
 
       // Create transcript hash
-      const transcriptHash = this.createTranscriptHash(conversation);
+      const transcriptHash = createHash('sha256')
+        .update(eventContent.join('\n'))
+        .digest('hex');
 
-      // Create session
+      // Create summary from first text content
+      const summary = eventContent.length > 0 && typeof eventContent[0] === 'string'
+        ? eventContent[0].substring(0, 200)
+        : 'No summary available';
+
       const session: Session = {
         agent_type: 'claude-code',
-        session_id: conversation.id || projectHash,
-        workspace_path: workspacePath,
-        referenced_files: referencedFiles,
-        timestamp,
-        transcript_summary: this.createSummary(conversation),
+        session_id: sessionId,
+        workspace_path: workspacePath || projectHash,
+        referenced_files: Array.from(referencedFiles),
+        timestamp: lastTimestamp,
+        transcript_summary: summary,
         transcript_hash: transcriptHash,
         raw_metadata: {
-          conversation_id: conversation.id,
           project_hash: projectHash,
-          created_at: conversation.created_at,
-          updated_at: conversation.updated_at,
+          session_file: sessionPath,
+          event_count: lines.length,
         },
       };
 
       return session;
     } catch (error) {
-      logger.debug(`Failed to parse conversation: ${error}`);
+      logger.debug(`Failed to parse JSONL session: ${error}`);
       return null;
     }
-  }
-
-  private extractReferencedFiles(conversation: ClaudeConversation): string[] {
-    const files = new Set<string>();
-
-    for (const message of conversation.messages || []) {
-      // Extract from tool uses
-      if (message.tool_uses) {
-        for (const toolUse of message.tool_uses) {
-          if (toolUse.file_path) {
-            files.add(toolUse.file_path);
-          }
-          // Extract from Read/Edit/Write tool inputs
-          if (toolUse.input?.file_path) {
-            files.add(String(toolUse.input.file_path));
-          }
-        }
-      }
-
-      // Extract file paths from message content (simple pattern matching)
-      const fileMatches = message.content.match(/\b[\w/-]+\.(ts|js|py|go|rs|java|cpp|c|h|json|yaml|yml|md|txt)\b/g);
-      if (fileMatches) {
-        fileMatches.forEach((f) => files.add(f));
-      }
-    }
-
-    return Array.from(files);
-  }
-
-  private getTimestamp(conversation: ClaudeConversation): Date {
-    // Use last message timestamp or conversation updated_at
-    if (conversation.messages && conversation.messages.length > 0) {
-      const lastMessage = conversation.messages[conversation.messages.length - 1];
-      if (lastMessage.timestamp) {
-        return new Date(lastMessage.timestamp);
-      }
-    }
-
-    if (conversation.updated_at) {
-      return new Date(conversation.updated_at);
-    }
-
-    return new Date();
-  }
-
-  private createTranscriptHash(conversation: ClaudeConversation): string {
-    // Hash all message content
-    const content = (conversation.messages || [])
-      .map((m) => m.content)
-      .join('\n');
-    return createHash('sha256').update(content).digest('hex');
-  }
-
-  private createSummary(conversation: ClaudeConversation): string {
-    // Extract first user message as summary
-    const firstUserMessage = conversation.messages?.find(
-      (m) => m.role === 'user'
-    );
-    if (firstUserMessage) {
-      return firstUserMessage.content.substring(0, 200);
-    }
-    return 'No summary available';
   }
 }

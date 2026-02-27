@@ -49,6 +49,7 @@ export class MatchingEngine {
     logger.debug(
       `Matching commit ${commit.shortSha} (${commitFiles.length} files) with ${sessions.length} sessions`
     );
+    logger.debug(`Commit files: ${commitFiles.join(', ')}`);
 
     // Phase 1: Repository isolation filter
     const repoSessions = this.filterByRepository(sessions, workspacePath);
@@ -162,6 +163,19 @@ export class MatchingEngine {
         session.timestamp,
         this.confidenceThreshold
       );
+
+      logger.debug(
+        `Session ${session.session_id.substring(0, 8)}: ` +
+        `files=${details.file_overlap_score.toFixed(2)}, ` +
+        `temporal=${details.temporal_score.toFixed(2)}, ` +
+        `final=${details.final_score.toFixed(2)}, ` +
+        `overlapping=${details.overlapping_files?.length || 0}/${commitFiles.length}`
+      );
+
+      if (details.final_score > 0.1) {
+        logger.debug(`  Session has ${session.referenced_files.length} files`);
+        logger.debug(`  First few: ${session.referenced_files.slice(0, 3).join(', ')}`);
+      }
 
       return {
         session,

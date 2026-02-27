@@ -132,6 +132,9 @@ export class GitRepository {
       let totalInsertions = 0;
       let totalDeletions = 0;
 
+      // Get repository root for absolute paths
+      const repoRoot = await this.getRepositoryRoot();
+
       for (const line of lines) {
         const parts = line.split('\t');
         if (parts.length >= 3) {
@@ -139,7 +142,12 @@ export class GitRepository {
           const deletions = parseInt(parts[1], 10) || 0;
           const filePath = parts[2];
 
-          changedFiles.push(filePath);
+          // Convert to absolute path for matching with AI session files
+          const absolutePath = filePath.startsWith('/')
+            ? filePath
+            : `${repoRoot}/${filePath}`;
+
+          changedFiles.push(absolutePath);
           totalInsertions += insertions;
           totalDeletions += deletions;
         }

@@ -137,7 +137,9 @@ export function calculateDetailedScore(
   threshold: number = 0.6
 ): ScoreDetails {
   // Calculate component scores
-  const fileScore = calculateJaccardSimilarity(commitFiles, sessionFiles);
+  // Use commit file coverage instead of Jaccard similarity
+  // This measures what % of commit files appear in the session
+  const fileScore = calculateFileOverlapPercentage(commitFiles, sessionFiles);
   const temporalScore = calculateTemporalScore(commitTime, sessionTime);
   const finalScore = calculateConfidenceScore(fileScore, temporalScore);
 
