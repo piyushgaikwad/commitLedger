@@ -4,6 +4,7 @@ import { createCaptureCommand } from './commands/capture.js';
 import { createShowCommand } from './commands/show.js';
 import { createShowChatCommand } from './commands/show-chat.js';
 import { createListCommand } from './commands/list.js';
+import { createDashboardCommand } from './commands/dashboard.js';
 import { installHooksCommand } from './commands/install-hooks.js';
 import { uninstallHooksCommand } from './commands/uninstall-hooks.js';
 import { logger, LogLevel } from '../utils/logger.js';
@@ -31,13 +32,13 @@ program.addCommand(createCaptureCommand());
 program.addCommand(createShowCommand());
 program.addCommand(createShowChatCommand());
 program.addCommand(createListCommand());
+program.addCommand(createDashboardCommand());
 program.addCommand(installHooksCommand);
 program.addCommand(uninstallHooksCommand);
 
 // TODO: Add more commands
 // program.addCommand(createQueryCommand());
 // program.addCommand(createStatsCommand());
-// program.addCommand(createDashboardCommand());
 // program.addCommand(createExportCommand());
 
 // Parse command line arguments
