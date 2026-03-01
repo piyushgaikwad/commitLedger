@@ -78,6 +78,18 @@ export class GitRepository {
   }
 
   /**
+   * Resolves a SHA reference (HEAD, branch name, short SHA, etc.) to a full SHA
+   */
+  async resolveSHA(ref: string): Promise<string> {
+    try {
+      const sha = await this.git.revparse([ref]);
+      return sha.trim();
+    } catch (error) {
+      throw new Error(`Failed to resolve SHA for ${ref}: ${error}`);
+    }
+  }
+
+  /**
    * Gets commit context for a given SHA (defaults to HEAD)
    */
   async getCommitContext(sha: string = 'HEAD'): Promise<CommitContext> {

@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { createInitCommand } from './commands/init.js';
 import { createCaptureCommand } from './commands/capture.js';
 import { createShowCommand } from './commands/show.js';
+import { createShowChatCommand } from './commands/show-chat.js';
 import { createListCommand } from './commands/list.js';
 import { installHooksCommand } from './commands/install-hooks.js';
 import { uninstallHooksCommand } from './commands/uninstall-hooks.js';
@@ -28,6 +29,7 @@ program
 program.addCommand(createInitCommand());
 program.addCommand(createCaptureCommand());
 program.addCommand(createShowCommand());
+program.addCommand(createShowChatCommand());
 program.addCommand(createListCommand());
 program.addCommand(installHooksCommand);
 program.addCommand(uninstallHooksCommand);

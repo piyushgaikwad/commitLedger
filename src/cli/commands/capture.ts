@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { GitRepository } from '../../git/repo.js';
 import { MetadataBranchManager } from '../../git/metadata-branch.js';
 import { receiptGenerator } from '../../receipt/generator.js';
+import { chatSummaryGenerator } from '../../receipt/chat-summary-generator.js';
 import { logger } from '../../utils/logger.js';
 import { ensureGitRepository, handleCommandError } from '../utils.js';
 import { sessionOrchestrator } from '../../ingestion/orchestrator.js';
 import { matchingEngine } from '../../matching/engine.js';
-import { calculateDetailedScore } from '../../matching/scoring.js';
+import type { Session } from '../../ingestion/types.js';
 
 export function createCaptureCommand(): Command {
   const command = new Command('capture');
@@ -58,6 +59,7 @@ async function captureCommand(
 
   // AI Detection: Try to match commit to AI session
   let receipt;
+  let matchedSession: Session | null = null;
   try {
     logger.debug('Attempting to detect AI agent...');
 
@@ -79,17 +81,29 @@ async function captureCommand(
 
       if (matchResult.session && matchResult.confidence_score >= 0.6) {
         // AI-assisted commit detected
-        receipt = receiptGenerator.generateAIReceipt(
-          commitContext,
-          diffSummary,
-          matchResult.session.agent_type,
-          matchResult.session.session_id,
-          matchResult.confidence_score
-        );
+        matchedSession = matchResult.session;
 
-        logger.debug(
-          `AI agent detected: ${matchResult.session.agent_type} (${(matchResult.confidence_score * 100).toFixed(1)}%)`
-        );
+        // Only generate AI receipt if agent type is known (not 'unknown')
+        if (matchResult.session.agent_type === 'claude-code' || matchResult.session.agent_type === 'cursor') {
+          receipt = receiptGenerator.generateAIReceipt(
+            commitContext,
+            diffSummary,
+            matchResult.session.agent_type,
+            matchResult.session.session_id,
+            matchResult.confidence_score
+          );
+
+          logger.debug(
+            `AI agent detected: ${matchResult.session.agent_type} (${(matchResult.confidence_score * 100).toFixed(1)}%)`
+          );
+        } else {
+          // Unknown agent type - treat as human
+          receipt = receiptGenerator.generateHumanReceipt(
+            commitContext,
+            diffSummary
+          );
+          logger.debug('Unknown agent type, treating as human commit');
+        }
       } else {
         // No confident match - human commit
         receipt = receiptGenerator.generateHumanReceipt(
@@ -119,6 +133,28 @@ async function captureCommand(
   await metadataBranch.storeReceipt(commitContext.sha, receipt);
 
   logger.success(`Receipt captured for ${commitContext.shortSha}`);
+
+  // Store chat summary if AI session was matched
+  if (matchedSession) {
+    try {
+      logger.debug('Generating chat summary...');
+      const chatSummary = await chatSummaryGenerator.generateFromSession(
+        commitContext.sha,
+        matchedSession
+      );
+
+      if (chatSummary) {
+        await metadataBranch.storeChatSummary(commitContext.sha, chatSummary);
+        logger.success(
+          `Chat summary captured (${chatSummary.chat_data.total_messages} messages)`
+        );
+      } else {
+        logger.debug('Could not generate chat summary');
+      }
+    } catch (error) {
+      logger.debug(`Failed to generate/store chat summary: ${error}`);
+    }
+  }
 
   if (!receipt.agent_metadata) {
     logger.info('No AI agent detected for this commit');
