@@ -246,9 +246,9 @@ function generateDashboardHTML(
     }
 
     .sidebar{
-      padding: 14px 12px;
-      border-right: 1px solid rgba(255,255,255,.06);
-      background: rgba(0,0,0,.12);
+      padding: 0;
+      border-right: none;
+      background: transparent;
       display:flex;
       flex-direction:column;
       align-items:center;
