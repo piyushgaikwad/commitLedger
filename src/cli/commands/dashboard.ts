@@ -59,6 +59,18 @@ async function dashboardCommand(options: {
   const limit = parseInt(options.limit, 10);
   const branch = options.branch || (await repo.getCurrentBranch());
 
+  // Get user name for greeting
+  let userName = 'Developer';
+  try {
+    const git = repo.getGitInstance();
+    const userConfig = await git.getConfig('user.name');
+    if (userConfig.value) {
+      userName = userConfig.value;
+    }
+  } catch (error) {
+    // Use default if git config not available
+  }
+
   logger.info(`Fetching ${limit} commits from branch: ${branch}`);
 
   // Get commit log
@@ -96,7 +108,7 @@ async function dashboardCommand(options: {
   }
 
   // Generate HTML
-  const html = generateDashboardHTML(commits, chatSummaries, branch, await repo.getRepositoryRoot());
+  const html = generateDashboardHTML(commits, chatSummaries, branch, await repo.getRepositoryRoot(), userName);
 
   // Write to file
   const outputPath = join(process.cwd(), options.output);
@@ -126,7 +138,8 @@ function generateDashboardHTML(
   commits: CommitWithReceipt[],
   chatSummaries: Record<string, any>,
   branch: string,
-  repoPath: string
+  repoPath: string,
+  userName: string
 ): string {
   const commitsJSON = JSON.stringify(commits, null, 2);
   const chatSummariesJSON = JSON.stringify(chatSummaries, null, 2);
@@ -137,284 +150,385 @@ function generateDashboardHTML(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>commitLedger Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    * {
+    :root{
+      /* darker + blackish */
+      --bg0:#05070a;
+      --bg1:#070a0f;
+      --bg2:#0a0f16;
+
+      --glass: rgba(255,255,255,.04);
+      --glass2: rgba(255,255,255,.03);
+      --stroke: rgba(255,255,255,.08);
+      --stroke2: rgba(255,255,255,.06);
+
+      --text:#d7dee8;
+      --muted:#97a7bb;
+      --muted2:#6f8299;
+
+      --green:#22c55e;
+      --red:#ef4444;
+      --amber:#f59e0b;
+
+      --shadow: 0 30px 90px rgba(0,0,0,.75);
+      --r1: 22px;
+      --r2: 18px;
+    }
+
+    *{ box-sizing:border-box; }
+
+    html, body{
+      height: 100%;
       margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #000000;
-      color: #e5e7eb;
-      line-height: 1.5;
-      min-height: 100vh;
-      padding: 24px;
-      font-weight: 400;
-    }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .header {
-      background: #0a0a0a;
-      padding: 24px 32px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      border: 1px solid #1f1f1f;
-    }
-
-    .header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #ffffff;
-      margin-bottom: 8px;
-      letter-spacing: -0.02em;
-    }
-
-    .header .subtitle {
-      color: #6b7280;
-      font-size: 0.875rem;
-      font-weight: 400;
-    }
-
-    .header .subtitle strong {
-      color: #9ca3af;
-      font-weight: 500;
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .stat-card {
-      background: #0a0a0a;
-      padding: 16px 20px;
-      border-radius: 10px;
-      border: 1px solid #1f1f1f;
-      transition: all 0.2s ease;
-    }
-
-    .stat-card:hover {
-      border-color: #2a2a2a;
-      background: #0f0f0f;
-    }
-
-    .stat-card .label {
-      color: #6b7280;
-      font-size: 0.75rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
-    }
-
-    .stat-card .value {
-      font-size: 1.875rem;
-      font-weight: 700;
-      color: #ffffff;
-      letter-spacing: -0.02em;
-    }
-
-    .commits {
-      background: #0a0a0a;
-      border-radius: 12px;
-      padding: 24px 28px;
-      border: 1px solid #1f1f1f;
-    }
-
-    .commits h2 {
-      font-size: 1.125rem;
-      font-weight: 600;
-      margin-bottom: 20px;
-      color: #ffffff;
-      letter-spacing: -0.01em;
-    }
-
-    .commit-card {
-      background: #050505;
-      border: 1px solid #1a1a1a;
-      border-radius: 8px;
-      padding: 14px 16px;
-      margin-bottom: 10px;
-      transition: all 0.2s ease;
-      position: relative;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 700px at 35% -10%, rgba(110,140,200,.14), transparent 55%),
+        radial-gradient(900px 600px at 70% -15%, rgba(160,120,220,.10), transparent 60%),
+        radial-gradient(1200px 900px at 50% 110%, rgba(0,0,0,.65), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1) 55%, var(--bg2));
       overflow: hidden;
     }
 
-    .commit-card:hover {
-      border-color: #2a2a2a;
-      background: #0a0a0a;
+    /* subtle vignette */
+    body::before{
+      content:"";
+      position:fixed; inset:0;
+      background:
+        radial-gradient(1200px 900px at 50% 45%, transparent 45%, rgba(0,0,0,.65) 78%, rgba(0,0,0,.9) 100%);
+      pointer-events:none;
+      mix-blend-mode: multiply;
     }
 
-    .commit-card.ai-assisted::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 3px;
-      background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 100%);
+    .shell{
+      height: 100%;
+      padding: 22px;
+      display:flex;
     }
 
-    .commit-header {
-      display: flex;
+    .app{
+      width: 100%;
+      height: 100%;
+      border-radius: 28px;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.08);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position:relative;
+    }
+
+    .app::after{
+      content:"";
+      position:absolute; inset:0;
+      border-radius: 28px;
+      pointer-events:none;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+    }
+
+    .topbar{
+      height: 0px;
+      padding: 0px;
+      display:none;
+    }
+
+    .main{
+      height: 100%;
+      display:grid;
+      grid-template-columns: 78px 1fr;
+    }
+
+    .sidebar{
+      padding: 14px 12px;
+      border-right: 1px solid rgba(255,255,255,.06);
+      background: rgba(0,0,0,.12);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 12px;
+    }
+    .nav{
+      width:48px; height:48px;
+      border-radius: 18px;
+      display:grid;
+      place-items:center;
+      border: 1px solid rgba(255,255,255,.06);
+      background: rgba(255,255,255,.02);
+      color: var(--muted);
+      cursor:pointer;
+    }
+    .nav.active{
+      border-color: rgba(124,92,255,.35);
+      background: rgba(124,92,255,.10);
+      color: #e6e1ff;
+    }
+    .nav:hover{ background: rgba(255,255,255,.04); color: var(--text); }
+
+    .content{
+      padding: 20px;
+      background: linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.16));
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,.12) transparent;
+    }
+    .content::-webkit-scrollbar{ width: 10px; }
+    .content::-webkit-scrollbar-thumb{
+      background: rgba(255,255,255,.10);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+
+    .hero{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom: 20px;
+    }
+    .h1{
+      font-size:28px;
+      font-weight:650;
+      letter-spacing:-.02em;
+      color: var(--text);
+    }
+    .h1 span{
+      color: var(--muted);
+    }
+    .subtitle{
+      margin-top:6px;
+      font-size:12px;
+      color: var(--muted);
+    }
+
+    .grid-4{
+      display:grid;
+      gap:12px;
+      grid-template-columns: repeat(4, 1fr);
+      margin-bottom: 16px;
+    }
+    @media (max-width: 1000px){
+      .grid-4{grid-template-columns: repeat(2, 1fr)}
+      .hero{flex-direction:column; align-items:flex-start}
+    }
+    @media (max-width: 560px){
+      .grid-4{grid-template-columns: 1fr}
+    }
+
+    .card{
+      background: var(--glass);
+      border:1px solid var(--stroke);
+      border-radius: 14px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06);
+    }
+    .card-inner{
+      padding:14px;
+    }
+    .kicker{
+      font-size:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.60);
+    }
+    .big{
+      margin-top:8px;
+      font-size:28px;
+      font-weight:650;
+      color: var(--text);
+    }
+    .small{
+      margin-top:4px;
+      font-size:11px;
+      color: var(--muted);
+    }
+
+    .section-header{
+      margin-bottom: 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 12px 16px;
+      background: var(--glass);
+      border:1px solid var(--stroke);
+      border-radius: 14px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06);
+    }
+    .section-header .left{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+    }
+    .section-title{
+      font-size:11px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(255,255,255,.60);
+    }
+    .repo-info{
+      font-size:13px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .repo-info .sep{
+      color: var(--muted2);
+      margin: 0 8px;
+    }
+    .branch-info{
+      display:flex;
+      align-items:center;
+      gap: 6px;
+      font-size:12px;
+      color: var(--muted);
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.09);
+    }
+    .branch-info svg{
+      width: 12px;
+      height: 12px;
+      opacity: .7;
+    }
+
+    .list-section{
+      margin-top: 0px;
+    }
+    .list{
+      height: auto;
+      min-height: 300px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.07);
+      background: rgba(255,255,255,.02);
+      overflow:auto;
+    }
+
+    .row{
+      display:flex;
       justify-content: space-between;
-      align-items: start;
-      gap: 16px;
+      align-items: flex-start;
+      gap: 20px;
+      padding: 14px 16px;
+      border-top: 1px solid rgba(255,255,255,.06);
     }
+    .row:first-child{ border-top:none; }
+    .row:hover{ background: rgba(255,255,255,.03); }
 
-    .commit-info {
+    .row > div:first-child{
       flex: 1;
       min-width: 0;
     }
 
-    .commit-sha {
-      font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', monospace;
-      color: #6b7280;
-      font-size: 0.75rem;
-      margin-bottom: 6px;
-      font-weight: 500;
-    }
-
-    .commit-message {
-      color: #ffffff;
-      font-size: 0.9375rem;
-      font-weight: 500;
+    .title{
+      font-size: 14px;
+      font-weight: 600;
       margin-bottom: 8px;
-      line-height: 1.4;
-      letter-spacing: -0.01em;
     }
-
-    .commit-meta {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      color: #6b7280;
-      font-size: 0.8125rem;
+    .meta{
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 11px;
     }
+    .dot{ opacity:.6; }
 
-    .commit-meta-item {
-      display: flex;
-      align-items: center;
-      gap: 5px;
+    .hash{
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.09);
+      color: var(--muted);
+      font-size: 10px;
     }
-
-    .commit-meta-item svg {
-      width: 14px;
-      height: 14px;
-      opacity: 0.6;
-    }
-
-    .ai-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .ai-badge.claude-code {
-      background: rgba(139, 92, 246, 0.15);
-      color: #a78bfa;
-      border: 1px solid rgba(139, 92, 246, 0.25);
-    }
-
-    .ai-badge.cursor {
-      background: rgba(59, 130, 246, 0.15);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.25);
-    }
-
-    .ai-badge.human {
-      background: rgba(107, 114, 128, 0.15);
-      color: #9ca3af;
-      border: 1px solid rgba(107, 114, 128, 0.2);
-    }
-
-    .ai-badge svg {
-      width: 13px;
-      height: 13px;
-    }
-
-    .stats-row {
-      display: flex;
-      gap: 12px;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid #1a1a1a;
-    }
-
-    .stat {
-      font-size: 0.8125rem;
-      color: #6b7280;
-      font-weight: 400;
-    }
-
-    .stat strong {
-      color: #9ca3af;
-      font-weight: 500;
-    }
-
-    .stat.additions {
-      color: #10b981;
-    }
-
-    .stat.additions strong {
-      color: #34d399;
-    }
-
-    .stat.deletions {
-      color: #ef4444;
-    }
-
-    .stat.deletions strong {
-      color: #f87171;
-    }
-
-    .confidence {
-      font-size: 0.6875rem;
-      color: #6b7280;
-      font-weight: 400;
-    }
-
-    .view-chat-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 8px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: #60a5fa;
-      background: rgba(59, 130, 246, 0.1);
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin-top: 8px;
-    }
-
-    .view-chat-btn:hover {
-      background: rgba(59, 130, 246, 0.15);
-      border-color: rgba(59, 130, 246, 0.3);
-    }
-
-    .view-chat-btn svg {
+    .hash svg{
       width: 12px;
       height: 12px;
+    }
+
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .chip.claude-code{
+      background: rgba(255,138,61,.10);
+      border: 1px solid rgba(255,138,61,.28);
+      color: #ffb380;
+    }
+    .chip.cursor{
+      background: rgba(59,130,246,.10);
+      border: 1px solid rgba(59,130,246,.28);
+      color: #60a5fa;
+    }
+    .chip.human{
+      background: rgba(240,231,214,.10);
+      border: 1px solid rgba(240,231,214,.28);
+      color: #F0E7d6;
+    }
+    .chip .b{
+      width:6px;height:6px;border-radius:999px;
+    }
+    .chip.claude-code .b{ background: rgba(255,138,61,.95); }
+    .chip.cursor .b{ background: rgba(59,130,246,.95); }
+    .chip.human .b{ background: rgba(240,231,214,.95); }
+
+    .rstats{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      justify-content:flex-start;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .diff{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .plus{ color: var(--green); font-weight: 700; }
+    .minus{ color: var(--red); font-weight: 700; }
+    .files{ color: var(--muted); }
+
+    .sub{
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      gap: 10px;
+      align-items:center;
+    }
+    .sep{ opacity:.5; }
+
+    .view-chat-btn{
+      display:inline-flex;
+      align-items:center;
+      gap: 5px;
+      padding: 5px 9px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 500;
+      color: #60a5fa;
+      background: rgba(59,130,246,.10);
+      border: 1px solid rgba(59,130,246,.25);
+      cursor:pointer;
+      transition: all 0.2s ease;
+      margin-top: 6px;
+    }
+    .view-chat-btn:hover{
+      background: rgba(59,130,246,.15);
+      border-color: rgba(59,130,246,.35);
+    }
+    .view-chat-btn svg{
+      width: 11px;
+      height: 11px;
     }
 
     /* Modal Styles */
@@ -438,36 +552,38 @@ function generateDashboardHTML(
     }
 
     .modal-content {
-      background: #0a0a0a;
-      border: 1px solid #1f1f1f;
-      border-radius: 12px;
+      background: var(--bg1);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 22px;
       max-width: 900px;
       width: 100%;
       max-height: 90vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      box-shadow: var(--shadow);
     }
 
     .modal-header {
       padding: 20px 24px;
-      border-bottom: 1px solid #1f1f1f;
+      border-bottom: 1px solid rgba(255,255,255,.06);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
     }
 
     .modal-header h3 {
       font-size: 1.125rem;
       font-weight: 600;
-      color: #ffffff;
+      color: var(--text);
       letter-spacing: -0.01em;
     }
 
     .modal-close {
       background: none;
       border: none;
-      color: #6b7280;
+      color: var(--muted);
       cursor: pointer;
       font-size: 1.5rem;
       line-height: 1;
@@ -476,7 +592,7 @@ function generateDashboardHTML(
     }
 
     .modal-close:hover {
-      color: #ffffff;
+      color: var(--text);
     }
 
     .modal-body {
@@ -486,39 +602,24 @@ function generateDashboardHTML(
     }
 
     .modal-body::-webkit-scrollbar {
-      width: 8px;
+      width: 10px;
     }
 
     .modal-body::-webkit-scrollbar-track {
-      background: #0a0a0a;
+      background: transparent;
     }
 
     .modal-body::-webkit-scrollbar-thumb {
-      background: #2a2a2a;
-      border-radius: 4px;
-    }
-
-    .modal-body::-webkit-scrollbar-thumb:hover {
-      background: #3a3a3a;
-    }
-
-    .chat-section {
-      margin-bottom: 24px;
-    }
-
-    .chat-section-title {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: #9ca3af;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 12px;
+      background: rgba(255,255,255,.10);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: content-box;
     }
 
     .message {
-      background: #050505;
-      border: 1px solid #1a1a1a;
-      border-radius: 8px;
+      background: rgba(0,0,0,.20);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 12px;
       padding: 12px 16px;
       margin-bottom: 12px;
     }
@@ -547,12 +648,12 @@ function generateDashboardHTML(
 
     .message-time {
       font-size: 0.75rem;
-      color: #6b7280;
-      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted2);
+      font-family: 'SF Mono', Monaco, monospace;
     }
 
     .message-content {
-      color: #e5e7eb;
+      color: var(--text);
       font-size: 0.875rem;
       line-height: 1.6;
       white-space: pre-wrap;
@@ -562,9 +663,9 @@ function generateDashboardHTML(
     .message-meta {
       margin-top: 8px;
       padding-top: 8px;
-      border-top: 1px solid #1a1a1a;
+      border-top: 1px solid rgba(255,255,255,.06);
       font-size: 0.75rem;
-      color: #6b7280;
+      color: var(--muted);
     }
 
     .message-meta-item {
@@ -573,47 +674,64 @@ function generateDashboardHTML(
 
     .loading {
       text-align: center;
-      color: #6b7280;
+      color: var(--muted);
       padding: 40px;
       font-size: 0.875rem;
     }
 
     .error {
       text-align: center;
-      color: #ef4444;
+      color: var(--red);
       padding: 40px;
       font-size: 0.875rem;
     }
 
-    @media (max-width: 768px) {
-      .header h1 {
-        font-size: 2rem;
-      }
-
-      .commit-header {
-        flex-direction: column;
-      }
-
-      .stats {
-        grid-template-columns: 1fr;
-      }
+    @media (max-width: 900px){
+      .shell{ padding: 12px; }
+      .row{ flex-direction: column; }
+      .rstats{ align-items:flex-start; }
+      .main{ grid-template-columns: 68px 1fr; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🤖 commitLedger Dashboard</h1>
-      <div class="subtitle">
-        Repository: <strong>${repoPath}</strong> • Branch: <strong>${branch}</strong>
+  <div class="shell">
+    <div class="app">
+      <div class="main">
+        <aside class="sidebar">
+        </aside>
+
+        <section class="content">
+          <div class="hero">
+            <div>
+              <div class="h1">Good day, <span>${userName}</span></div>
+              <div class="subtitle">Here's an overview of your recent activity</div>
+            </div>
+          </div>
+
+          <section class="grid-4" id="stats-grid"></section>
+
+          <div class="section-header">
+            <div class="left">
+              <div class="section-title">Checkpoints</div>
+              <div class="repo-info">
+                ${repoPath.split('/').slice(-2).join(' <span class="sep">/</span> ')}
+              </div>
+            </div>
+            <div class="branch-info">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <path d="M7 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm10 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM7 9a1 1 0 0 1 1 1v2c0 2.76 2.24 5 5 5h2a1 1 0 1 1 0 2h-2c-3.87 0-7-3.13-7-7v-2a1 1 0 0 1 1-1Z"
+                  fill="currentColor"/>
+              </svg>
+              ${branch}
+            </div>
+          </div>
+
+          <section class="list-section card">
+            <div class="list" id="list"></div>
+          </section>
+        </section>
       </div>
-    </div>
-
-    <div class="stats" id="stats"></div>
-
-    <div class="commits">
-      <h2>📝 Recent Commits</h2>
-      <div id="commits-container"></div>
     </div>
   </div>
 
@@ -634,98 +752,121 @@ function generateDashboardHTML(
     const commits = ${commitsJSON};
     const chatSummaries = ${chatSummariesJSON};
 
-    // Calculate statistics
-    const totalCommits = commits.length;
-    const aiCommits = commits.filter(c => c.aiAgent).length;
-    const humanCommits = totalCommits - aiCommits;
-    const claudeCommits = commits.filter(c => c.aiAgent === 'claude-code').length;
-    const cursorCommits = commits.filter(c => c.aiAgent === 'cursor').length;
+    function esc(s){
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
 
-    // Render statistics
-    const statsContainer = document.getElementById('stats');
-    statsContainer.innerHTML = \`
-      <div class="stat-card">
-        <div class="label">Total Commits</div>
-        <div class="value">\${totalCommits}</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">AI-Assisted</div>
-        <div class="value">\${aiCommits}</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Human-Authored</div>
-        <div class="value">\${humanCommits}</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Claude Code</div>
-        <div class="value">\${claudeCommits}</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Cursor</div>
-        <div class="value">\${cursorCommits}</div>
-      </div>
-    \`;
+    function formatDate(timestamp){
+      const now = new Date();
+      const date = new Date(timestamp);
+      const diffMs = now - date;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    // Render commits
-    const commitsContainer = document.getElementById('commits-container');
-    commits.forEach(commit => {
-      const aiClass = commit.aiAgent ? 'ai-assisted' : '';
-      const agentBadge = commit.aiAgent
-        ? \`<div class="ai-badge \${commit.aiAgent}">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-               <path d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813A3.75 3.75 0 007.466 7.89l.813-2.846A.75.75 0 019 4.5z" />
-             </svg>
-             \${commit.aiAgent}
-             \${commit.confidence ? \`<span class="confidence">(\${(commit.confidence * 100).toFixed(0)}%)</span>\` : ''}
-           </div>\`
-        : \`<div class="ai-badge human">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-               <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" />
-             </svg>
-             Human
-           </div>\`;
+      if (diffDays === 0) return 'today';
+      if (diffDays === 1) return 'yesterday';
+      if (diffDays < 7) return diffDays + 'd ago';
+      if (diffDays < 30) return Math.floor(diffDays / 7) + 'w ago';
+      if (diffDays < 365) return Math.floor(diffDays / 30) + 'mo ago';
+      return Math.floor(diffDays / 365) + 'y ago';
+    }
 
-      const date = new Date(commit.timestamp).toLocaleString();
+    function row(commit){
+      const agentClass = commit.aiAgent ? commit.aiAgent : 'human';
+      const agentLabel = commit.aiAgent === 'claude-code' ? 'Claude Code' :
+                         commit.aiAgent === 'cursor' ? 'Cursor' : 'Human';
+      const confidenceText = commit.confidence ? \` \${(commit.confidence * 100).toFixed(0)}%\` : '';
 
-      commitsContainer.innerHTML += \`
-        <div class="commit-card \${aiClass}">
-          <div class="commit-header">
-            <div class="commit-info">
-              <div class="commit-sha">\${commit.sha}</div>
-              <div class="commit-message">\${commit.message}</div>
-              <div class="commit-meta">
-                <div class="commit-meta-item">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                    <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" />
-                  </svg>
-                  \${commit.author}
-                </div>
-                <div class="commit-meta-item">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                    <path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3A.75.75 0 0118 3v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zm13.5 9a1.5 1.5 0 00-1.5-1.5H5.25a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5v-7.5z" clip-rule="evenodd" />
-                  </svg>
-                  \${date}
-                </div>
-              </div>
+      return \`
+        <div class="row">
+          <div>
+            <div class="title">\${esc(commit.message)}</div>
+            <div class="meta">
+              <span class="hash">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 7a4 4 0 1 0 0 8h6a4 4 0 1 0 0-8H9Z" stroke="rgba(215,222,232,.55)" stroke-width="2"/>
+                </svg>
+                \${esc(commit.shortSha)}
+              </span>
+              <span class="dot">•</span>
+              <span>\${formatDate(commit.timestamp)}</span>
+              <span class="dot">•</span>
+              <span>\${esc(commit.author)}</span>
+              <span class="chip \${agentClass}">
+                <span class="b"></span>\${agentLabel}\${confidenceText}
+              </span>
             </div>
-            \${agentBadge}
+            \${commit.hasChatSummary ? \`
+              <button class="view-chat-btn" onclick="openChatModal('\${commit.sha}')">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.678 3.348-3.97z" clip-rule="evenodd" />
+                </svg>
+                View Chat
+              </button>
+            \` : ''}
           </div>
-          <div class="stats-row">
-            <div class="stat"><strong>\${commit.filesChanged}</strong> files changed</div>
-            <div class="stat additions"><strong>+\${commit.insertions}</strong> additions</div>
-            <div class="stat deletions"><strong>-\${commit.deletions}</strong> deletions</div>
+
+          <div class="rstats">
+            <div class="diff">
+              <span class="plus">+\${commit.insertions}</span>
+              <span class="minus">-\${commit.deletions}</span>
+              <span class="files">\${commit.filesChanged} file\${commit.filesChanged !== 1 ? 's' : ''}</span>
+            </div>
           </div>
-          \${commit.hasChatSummary ? \`
-            <button class="view-chat-btn" onclick="openChatModal('\${commit.sha}')">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.678 3.348-3.97z" clip-rule="evenodd" />
-              </svg>
-              View Chat History
-            </button>
-          \` : ''}
         </div>
       \`;
-    });
+    }
+
+    function renderStats(){
+      const totalCommits = commits.length;
+      const humanCommits = commits.filter(c => !c.aiAgent).length;
+      const claudeCommits = commits.filter(c => c.aiAgent === 'claude-code').length;
+      const cursorCommits = commits.filter(c => c.aiAgent === 'cursor').length;
+
+      const statsGrid = document.getElementById('stats-grid');
+      statsGrid.innerHTML = \`
+        <div class="card">
+          <div class="card-inner">
+            <div class="kicker">Total Commits</div>
+            <div class="big">\${totalCommits}</div>
+            <div class="small">All commits analyzed</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-inner">
+            <div class="kicker">Human Commits</div>
+            <div class="big">\${humanCommits}</div>
+            <div class="small">Manually authored</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-inner">
+            <div class="kicker">Claude Commits</div>
+            <div class="big">\${claudeCommits}</div>
+            <div class="small">Claude Code assisted</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-inner">
+            <div class="kicker">Cursor Commits</div>
+            <div class="big">\${cursorCommits}</div>
+            <div class="small">Cursor AI assisted</div>
+          </div>
+        </div>
+      \`;
+    }
+
+    function render(){
+      const list = document.getElementById('list');
+      list.innerHTML = commits.map(row).join('');
+    }
+
+    renderStats();
+    render();
 
     // Modal functions
     function openChatModal(sha) {
