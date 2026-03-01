@@ -145,8 +145,11 @@ async function captureCommand(
 
       if (chatSummary) {
         await metadataBranch.storeChatSummary(commitContext.sha, chatSummary);
+        const tokenInfo = chatSummary.chat_data.token_usage
+          ? `, ${chatSummary.chat_data.token_usage.total_tokens} tokens`
+          : '';
         logger.success(
-          `Chat summary captured (${chatSummary.chat_data.total_messages} messages)`
+          `Chat summary captured (${chatSummary.chat_data.total_messages} messages${tokenInfo})`
         );
       } else {
         logger.debug('Could not generate chat summary');

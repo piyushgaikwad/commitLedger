@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Checkpoints - Fullscreen Dark</title>
+    <style>
+      :root{
+        /* darker + blackish */
+        --bg0:#05070a;
+        --bg1:#070a0f;
+        --bg2:#0a0f16;
+
+        --glass: rgba(255,255,255,.04);
+        --glass2: rgba(255,255,255,.03);
+        --stroke: rgba(255,255,255,.08);
+        --stroke2: rgba(255,255,255,.06);
+
+        --text:#d7dee8;
+        --muted:#97a7bb;
+        --muted2:#6f8299;
+
+        --green:#22c55e;
+        --red:#ef4444;
+        --amber:#f59e0b;
+
+        --shadow: 0 30px 90px rgba(0,0,0,.75);
+        --r1: 22px;
+        --r2: 18px;
+      }
+
+      *{ box-sizing:border-box; }
+
+      html, body{
+        height: 100%;
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        color: var(--text);
+        background:
+          radial-gradient(1200px 700px at 35% -10%, rgba(110,140,200,.14), transparent 55%),
+          radial-gradient(900px 600px at 70% -15%, rgba(160,120,220,.10), transparent 60%),
+          radial-gradient(1200px 900px at 50% 110%, rgba(0,0,0,.65), transparent 60%),
+          linear-gradient(180deg, var(--bg0), var(--bg1) 55%, var(--bg2));
+        overflow: hidden; /* like app */
+      }
+
+      /* subtle vignette (more blackish edges) */
+      body::before{
+        content:"";
+        position:fixed; inset:0;
+        background:
+          radial-gradient(1200px 900px at 50% 45%, transparent 45%, rgba(0,0,0,.65) 78%, rgba(0,0,0,.9) 100%);
+        pointer-events:none;
+        mix-blend-mode: multiply;
+      }
+
+      /* app full screen container */
+      .shell{
+        height: 100%;
+        padding: 22px;
+        display:flex;
+      }
+
+      .app{
+        width: 100%;
+        height: 100%;
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+        border: 1px solid rgba(255,255,255,.08);
+        box-shadow: var(--shadow);
+        overflow:hidden;
+        position:relative;
+      }
+
+      /* inner glow border */
+      .app::after{
+        content:"";
+        position:absolute; inset:0;
+        border-radius: 28px;
+        pointer-events:none;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+      }
+
+      /* topbar */
+      .topbar{
+        height: 74px;
+        padding: 16px 18px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+        border-bottom: 1px solid rgba(255,255,255,.06);
+      }
+
+      .brand{
+        display:flex; align-items:center; gap: 12px;
+        font-weight: 600;
+        letter-spacing: .2px;
+      }
+      .logo{
+        width:30px; height:30px;
+        border-radius: 12px;
+        display:grid; place-items:center;
+        background: rgba(255,255,255,.06);
+        border: 1px solid rgba(255,255,255,.10);
+      }
+      .repo small{ color: var(--muted); font-weight: 500; margin: 0 6px; }
+      .right{
+        display:flex; align-items:center; gap: 12px;
+      }
+      .ghost{
+        font-size: 13px;
+        color: var(--muted);
+        padding: 9px 12px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        cursor:pointer;
+        user-select:none;
+      }
+      .ghost:hover{
+        border-color: rgba(255,255,255,.10);
+        background: rgba(255,255,255,.03);
+        color: var(--text);
+      }
+      .avatar{
+        width:28px; height:28px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #1f2937, #0b1220);
+        border: 1px solid rgba(255,255,255,.12);
+      }
+
+      /* main grid */
+      .main{
+        height: calc(100% - 74px);
+        display:grid;
+        grid-template-columns: 78px 1fr;
+      }
+
+      /* sidebar */
+      .sidebar{
+        padding: 14px 12px;
+        border-right: 1px solid rgba(255,255,255,.06);
+        background: rgba(0,0,0,.12);
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap: 12px;
+      }
+      .nav{
+        width:48px; height:48px;
+        border-radius: 18px;
+        display:grid;
+        place-items:center;
+        border: 1px solid rgba(255,255,255,.06);
+        background: rgba(255,255,255,.02);
+        color: var(--muted);
+        cursor:pointer;
+      }
+      .nav.active{
+        border-color: rgba(124,92,255,.35);
+        background: rgba(124,92,255,.10);
+        color: #e6e1ff;
+      }
+      .nav:hover{ background: rgba(255,255,255,.04); color: var(--text); }
+      .kbd{
+        margin-top:auto;
+        font-size: 11px;
+        color: var(--muted2);
+        border: 1px solid rgba(255,255,255,.10);
+        background: rgba(0,0,0,.20);
+        padding: 4px 8px;
+        border-radius: 10px;
+      }
+
+      /* content */
+      .content{
+        padding: 16px;
+        background: linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.16));
+      }
+
+      .controls{
+        display:flex;
+        gap: 12px;
+        align-items:center;
+        padding: 8px;
+      }
+
+      .select, .search{
+        height: 46px;
+        display:flex;
+        align-items:center;
+        gap: 10px;
+        padding: 0 12px;
+        border-radius: 16px;
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.09);
+      }
+      .select{
+        min-width: 260px;
+        justify-content:space-between;
+      }
+      .select .left{
+        display:flex; align-items:center; gap: 10px;
+      }
+      .pill{
+        font-size: 11px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        color: var(--muted);
+        background: rgba(255,255,255,.04);
+        border: 1px solid rgba(255,255,255,.08);
+      }
+
+      .search{ flex:1; }
+      .search input{
+        width:100%;
+        border:none;
+        outline:none;
+        background: transparent;
+        color: var(--text);
+        font-size: 14px;
+      }
+      .search input::placeholder{ color: rgba(151,167,187,.75); }
+
+      .list{
+        margin-top: 8px;
+        height: calc(100% - 70px);
+        border-radius: 22px;
+        border: 1px solid rgba(255,255,255,.07);
+        background: rgba(255,255,255,.02);
+        overflow:auto;
+
+        /* nice scroll */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,.12) transparent;
+      }
+      .list::-webkit-scrollbar{ width: 10px; }
+      .list::-webkit-scrollbar-thumb{
+        background: rgba(255,255,255,.10);
+        border-radius: 999px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+      }
+
+      .row{
+        display:grid;
+        grid-template-columns: 1fr 260px;
+        gap: 16px;
+        padding: 16px 18px;
+        border-top: 1px solid rgba(255,255,255,.06);
+      }
+      .row:first-child{ border-top:none; }
+      .row:hover{ background: rgba(255,255,255,.03); }
+
+      .title{
+        font-size: 15px;
+        font-weight: 650;
+        margin-bottom: 10px;
+      }
+      .meta{
+        display:flex;
+        align-items:center;
+        flex-wrap:wrap;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .dot{ opacity:.6; }
+
+      .hash{
+        display:inline-flex;
+        align-items:center;
+        gap: 8px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.09);
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .chip{
+        display:inline-flex;
+        align-items:center;
+        gap: 8px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: rgba(245,158,11,.10);
+        border: 1px solid rgba(245,158,11,.28);
+        color: #ffd48a;
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .chip .b{
+        width:7px;height:7px;border-radius:999px;
+        background: rgba(245,158,11,.95);
+      }
+
+      .rstats{
+        display:flex;
+        flex-direction:column;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap: 10px;
+      }
+      .diff{
+        display:flex;
+        gap: 12px;
+        align-items:center;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .plus{ color: var(--green); font-weight: 750; }
+      .minus{ color: var(--red); font-weight: 750; }
+      .files{ color: var(--muted); }
+
+      .sub{
+        font-size: 12px;
+        color: var(--muted);
+        display:flex;
+        gap: 10px;
+        align-items:center;
+      }
+      .sep{ opacity:.5; }
+
+      @media (max-width: 900px){
+        .shell{ padding: 12px; }
+        .row{ grid-template-columns: 1fr; }
+        .rstats{ align-items:flex-start; }
+        .select{ min-width: 200px; }
+        .main{ grid-template-columns: 68px 1fr; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <div class="app">
+        <div class="topbar">
+          <div class="brand">
+            <div class="logo" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M6 7.5C6 6.12 7.12 5 8.5 5H18a1 1 0 1 1 0 2H8.5a.5.5 0 0 0-.5.5V10h9a1 1 0 1 1 0 2H8v2h10a1 1 0 1 1 0 2H8v2.5a.5.5 0 0 0 .5.5H18a1 1 0 1 1 0 2H8.5C7.12 21 6 19.88 6 18.5v-11Z"
+                      fill="rgba(215,222,232,.92)"/>
+              </svg>
+            </div>
+            <div class="repo">evisdren <small>/</small> test-app</div>
+          </div>
+
+          <div class="right">
+            <div class="ghost">Feedback</div>
+            <div class="avatar" title="Profile"></div>
+          </div>
+        </div>
+
+        <div class="main">
+          <aside class="sidebar">
+            <button class="nav active" title="Checkpoints">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"
+                      fill="currentColor" opacity=".95"/>
+              </svg>
+            </button>
+            <button class="nav" title="Sessions">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3 3 8l9 5 9-5-9-5Zm0 10L3 8v4l9 5 9-5V8l-9 5Zm0 6-9-5v4l9 5 9-5v-4l-9 5Z"
+                      fill="currentColor" opacity=".95"/>
+              </svg>
+            </button>
+            <button class="nav" title="Settings">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.1 7.1 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 1h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.57.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 7.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.83 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.51.4 1.06.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.8c.24 0 .45-.18.49-.42l.36-2.54c.57-.23 1.12-.54 1.63-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"
+                      fill="currentColor" opacity=".95"/>
+              </svg>
+            </button>
+
+            <div class="kbd">⌘K</div>
+          </aside>
+
+          <section class="content">
+            <div class="controls">
+              <div class="select" role="button" aria-label="Branch selector">
+                <div class="left">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M7 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm10 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM7 9a1 1 0 0 1 1 1v2c0 2.76 2.24 5 5 5h2a1 1 0 1 1 0 2h-2c-3.87 0-7-3.13-7-7v-2a1 1 0 0 1 1-1Z"
+                      fill="rgba(215,222,232,.85)"/>
+                  </svg>
+                  <div style="font-weight:650;">main</div>
+                  <span class="pill">default</span>
+                </div>
+
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="opacity:.7;">
+                  <path d="M7 10l5 5 5-5" stroke="rgba(215,222,232,.75)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+
+              <div class="search" aria-label="Search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Zm6.1-1.4 4.2 4.2"
+                        stroke="rgba(215,222,232,.7)" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <input id="q" placeholder="Search checkpoints..." />
+              </div>
+            </div>
+
+            <div class="list" id="list"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const data = [
+        { title:"lets add a new feature to the app - it can be pretty small", hash:"8a513f56ed70", when:"yesterday", who:"evisdren", agent:"Claude Code", plus:48, minus:11, files:1, sessions:1, tokens:"522 tokens" },
+        { title:"make an update in my app", hash:"a5857b1c7f7d", when:"3d ago", who:"evisdren", agent:"Claude Code", plus:53, minus:9,  files:1, sessions:1, tokens:"643 tokens" },
+        { title:"make another update", hash:"b08c049f480c", when:"3d ago", who:"evisdren", agent:"Claude Code", plus:1,  minus:1,  files:1, sessions:1, tokens:"53 tokens" },
+        { title:"make another small change", hash:"6b987fb66308", when:"3d ago", who:"evisdren", agent:"Claude Code", plus:1,  minus:1,  files:1, sessions:1, tokens:"56 tokens" },
+        { title:"make some small change", hash:"5b7a4332c07b", when:"4d ago", who:"evisdren", agent:"Claude Code", plus:1,  minus:1,  files:1, sessions:1, tokens:"36 tokens" },
+        { title:"add a feature to my blog, you decide, make it small", hash:"4badcc8758c9", when:"4d ago", who:"evisdren", agent:"Claude Code", plus:75, minus:28, files:1, sessions:2, tokens:"1.7k tokens" },
+        { title:"okay lets make a change to the do to app, make it pretty small, styling change", hash:"7479acc4428d", when:"4d ago", who:"evisdren", agent:"Claude Code", plus:18, minus:4,  files:1, sessions:2, tokens:"569 tokens" },
+        { title:"update my todo app: suggest a change", hash:"29ad08f179e6", when:"4d ago", who:"evisdren", agent:"Claude Code", plus:20, minus:1,  files:1, sessions:1, tokens:"743 tokens" },
+      ];
+
+      const list = document.getElementById("list");
+      const q = document.getElementById("q");
+
+      function esc(s){
+        return String(s)
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+
+      function row(item){
+        return `
+          <div class="row" data-title="${esc(item.title.toLowerCase())}">
+            <div>
+              <div class="title">${esc(item.title)}</div>
+              <div class="meta">
+                <span class="hash">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M9 7a4 4 0 1 0 0 8h6a4 4 0 1 0 0-8H9Z" stroke="rgba(215,222,232,.55)" stroke-width="2"/>
+                  </svg>
+                  ${esc(item.hash)}
+                </span>
+                <span class="dot">•</span>
+                <span>${esc(item.when)}</span>
+                <span class="dot">•</span>
+                <span>${esc(item.who)}</span>
+                <span class="chip"><span class="b"></span>${esc(item.agent)}</span>
+              </div>
+            </div>
+
+            <div class="rstats">
+              <div class="diff">
+                <span class="plus">+${item.plus}</span>
+                <span class="minus">-${item.minus}</span>
+                <span class="files">${item.files} file</span>
+              </div>
+              <div class="sub">
+                <span>${item.sessions} session${item.sessions>1?"s":""}</span>
+                <span class="sep">·</span>
+                <span>${esc(item.tokens)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function render(filter=""){
+        const f = filter.trim().toLowerCase();
+        list.innerHTML = data
+          .filter(x => x.title.toLowerCase().includes(f))
+          .map(row).join("");
+      }
+
+      q.addEventListener("input", () => render(q.value));
+      render();
+    </script>
+  </body>
+</html>

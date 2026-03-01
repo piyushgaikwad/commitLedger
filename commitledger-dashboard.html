@@ -1,158 +1,4 @@
-import { Command } from 'commander';
-import { GitRepository } from '../../git/repo.js';
-import { MetadataBranchManager } from '../../git/metadata-branch.js';
-import { logger } from '../../utils/logger.js';
-import { ensureGitRepository, handleCommandError } from '../utils.js';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { execSync } from 'child_process';
-
-export function createDashboardCommand(): Command {
-  const command = new Command('dashboard');
-
-  command
-    .description('Generate and open an HTML dashboard for commits')
-    .option('-b, --branch <name>', 'Show commits for specific branch', '')
-    .option('-l, --limit <number>', 'Limit number of commits to show', '50')
-    .option('-o, --output <path>', 'Output HTML file path', 'commitledger-dashboard.html')
-    .option('--no-open', 'Do not automatically open the dashboard in browser')
-    .action(async (options) => {
-      try {
-        await dashboardCommand(options);
-      } catch (error) {
-        handleCommandError(error, 'dashboard');
-      }
-    });
-
-  return command;
-}
-
-interface CommitWithReceipt {
-  sha: string;
-  shortSha: string;
-  author: string;
-  email: string;
-  timestamp: string;
-  message: string;
-  branch: string;
-  aiAgent: string | null;
-  confidence: number | null;
-  filesChanged: number;
-  insertions: number;
-  deletions: number;
-  hasChatSummary: boolean;
-  sessions: number;
-  tokens: number | null;
-}
-
-async function dashboardCommand(options: {
-  branch: string;
-  limit: string;
-  output: string;
-  open: boolean;
-}): Promise<void> {
-  const repo = new GitRepository();
-  await ensureGitRepository(repo);
-  const metadataBranch = new MetadataBranchManager(repo);
-
-  logger.info('Generating dashboard...');
-
-  // Get commits
-  const limit = parseInt(options.limit, 10);
-  const branch = options.branch || (await repo.getCurrentBranch());
-
-  // Get user name for greeting
-  let userName = 'Developer';
-  try {
-    const git = repo.getGitInstance();
-    const userConfig = await git.getConfig('user.name');
-    if (userConfig.value) {
-      userName = userConfig.value;
-    }
-  } catch (error) {
-    // Use default if git config not available
-  }
-
-  logger.info(`Fetching ${limit} commits from branch: ${branch}`);
-
-  // Get commit log
-  const git = repo.getGitInstance();
-  const log = await git.log(['-n', limit.toString(), branch]);
-
-  // Collect commit data with receipts and chat summaries
-  const commits: CommitWithReceipt[] = [];
-  const chatSummaries: Record<string, any> = {};
-
-  for (const commit of log.all) {
-    const receipt = await metadataBranch.retrieveReceipt(commit.hash);
-    const chatSummary = await metadataBranch.retrieveChatSummary(commit.hash);
-    const hasChatSummary = chatSummary !== null;
-
-    if (chatSummary) {
-      chatSummaries[commit.hash] = chatSummary;
-    }
-
-    // Extract session and token data from chat summary
-    const sessions = chatSummary ? 1 : 0;
-    const tokens = chatSummary?.chat_data?.token_usage?.total_tokens || null;
-
-    commits.push({
-      sha: commit.hash,
-      shortSha: commit.hash.substring(0, 7),
-      author: commit.author_name,
-      email: commit.author_email,
-      timestamp: commit.date,
-      message: commit.message,
-      branch: branch,
-      aiAgent: receipt?.agent_metadata?.agent_type || null,
-      confidence: receipt?.agent_metadata?.confidence_score || null,
-      filesChanged: receipt?.diff_statistics.files_changed || 0,
-      insertions: receipt?.diff_statistics.insertions || 0,
-      deletions: receipt?.diff_statistics.deletions || 0,
-      hasChatSummary: hasChatSummary,
-      sessions: sessions,
-      tokens: tokens,
-    });
-  }
-
-  // Generate HTML
-  const html = generateDashboardHTML(commits, chatSummaries, branch, await repo.getRepositoryRoot(), userName);
-
-  // Write to file
-  const outputPath = join(process.cwd(), options.output);
-  await fs.writeFile(outputPath, html, 'utf8');
-
-  logger.success(`Dashboard generated: ${outputPath}`);
-
-  // Open in browser
-  if (options.open) {
-    try {
-      const platform = process.platform;
-      if (platform === 'darwin') {
-        execSync(`open "${outputPath}"`);
-      } else if (platform === 'win32') {
-        execSync(`start "" "${outputPath}"`);
-      } else {
-        execSync(`xdg-open "${outputPath}"`);
-      }
-      logger.info('Opening dashboard in browser...');
-    } catch (error) {
-      logger.warn('Could not open browser automatically');
-    }
-  }
-}
-
-function generateDashboardHTML(
-  commits: CommitWithReceipt[],
-  chatSummaries: Record<string, any>,
-  branch: string,
-  repoPath: string,
-  userName: string
-): string {
-  const commitsJSON = JSON.stringify(commits, null, 2);
-  const chatSummariesJSON = JSON.stringify(chatSummaries, null, 2);
-
-  return `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -710,7 +556,7 @@ function generateDashboardHTML(
         <section class="content">
           <div class="hero">
             <div>
-              <div class="h1">Good day, <span>${userName}</span></div>
+              <div class="h1">Good day, <span>Piyush Gaikwad</span></div>
               <div class="subtitle">Here's an overview of your recent activity</div>
             </div>
           </div>
@@ -721,7 +567,7 @@ function generateDashboardHTML(
             <div class="left">
               <div class="section-title">Repository Root: </div>
               <div class="repo-info">
-                ${repoPath.split('/').slice(-2).join(' <span class="sep">/</span> ')}
+                dev <span class="sep">/</span> commitLedger
               </div>
               <span class="dot" style="margin: 0 8px; opacity: .6;">•</span>
               <div class="section-title">Branch: </div>
@@ -730,7 +576,7 @@ function generateDashboardHTML(
                   <path d="M7 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm10 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM7 9a1 1 0 0 1 1 1v2c0 2.76 2.24 5 5 5h2a1 1 0 1 1 0 2h-2c-3.87 0-7-3.13-7-7v-2a1 1 0 0 1 1-1Z"
                     fill="currentColor"/>
                 </svg>
-                ${branch}
+                main
               </div>
             </div>
           </div>
@@ -757,8 +603,281 @@ function generateDashboardHTML(
   </div>
 
   <script>
-    const commits = ${commitsJSON};
-    const chatSummaries = ${chatSummariesJSON};
+    const commits = [
+  {
+    "sha": "bf1bfe23e9deca75af2ff8af9a0b78388766ce35",
+    "shortSha": "bf1bfe2",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-03-01T02:49:33-08:00",
+    "message": "add confidence score",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 1,
+    "insertions": 427,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "f9da8ce5b2b17e6e68a4a326130fcad2d7d8680b",
+    "shortSha": "f9da8ce",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T13:39:44-08:00",
+    "message": "feat: Implement list command with filtering options",
+    "branch": "main",
+    "aiAgent": "claude-code",
+    "confidence": 0.9996408817815121,
+    "filesChanged": 2,
+    "insertions": 233,
+    "deletions": 1,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "e7569a9cfb4ecde2d11b529b5d28faedf87d23bb",
+    "shortSha": "e7569a9",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T13:29:29-08:00",
+    "message": "feat: Implement Git hooks infrastructure",
+    "branch": "main",
+    "aiAgent": "claude-code",
+    "confidence": 0.9978894589762202,
+    "filesChanged": 6,
+    "insertions": 336,
+    "deletions": 2,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "a33f4a11d96254076656945f339f4bca859784ae",
+    "shortSha": "a33f4a1",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T13:18:38-08:00",
+    "message": "Merge branch 'main' into phase-2",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "4df877df3626e0031ae91aed473b39c2b04b52d3",
+    "shortSha": "4df877d",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T13:07:34-08:00",
+    "message": "checker",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "0f3a3cc1daf38cd422bdb14df191018d67849298",
+    "shortSha": "0f3a3cc",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T12:37:58-08:00",
+    "message": "feat: Fix AI detection - use commit file coverage instead of Jaccard similarity",
+    "branch": "main",
+    "aiAgent": "claude-code",
+    "confidence": 0.9989128080828441,
+    "filesChanged": 5,
+    "insertions": 438,
+    "deletions": 127,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "c3dda641273c39dc948cf4608b3f747093c96653",
+    "shortSha": "c3dda64",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T12:30:19-08:00",
+    "message": "Merge pull request #2 from gimlet-impl/renovate/npm-express-vulnerability",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "1c9533472d928ec4e481e95fa0c6f2329b40df3e",
+    "shortSha": "1c95334",
+    "author": "renovate-enterprise-prod[bot]",
+    "email": "49298+renovate-enterprise-prod[bot]@users.noreply.git.soma.salesforce.com",
+    "timestamp": "2026-02-27T20:27:25Z",
+    "message": "@W-3300013 Update dependency express to v5 [SECURITY]",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "3168c864119ef02bf11153109f93e3a203ee31f7",
+    "shortSha": "3168c86",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T12:22:18-08:00",
+    "message": "fix: Pass commit files to matching engine and fix duplicate method",
+    "branch": "main",
+    "aiAgent": "claude-code",
+    "confidence": 0.8834554610757996,
+    "filesChanged": 3,
+    "insertions": 12,
+    "deletions": 39,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "7254d2d5aae8116085a43ce95d529a8c918e611f",
+    "shortSha": "7254d2d",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T12:19:44-08:00",
+    "message": "feat: Implement Phase 2 core components - Session ingestion & matching",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "ea3c10196fde6f09bf998bea6376d19861ba7334",
+    "shortSha": "ea3c101",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T12:14:12-08:00",
+    "message": "Phase 1 done ✅",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "6c158c8781705a1484f8a771fa4d4a218d6c26b1",
+    "shortSha": "6c158c8",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T12:05:16-08:00",
+    "message": "docs: Add comprehensive GUIDANCE.md with full user documentation",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "cd5c5c4f7ba7de09cbd83227e9aba0854d874ece",
+    "shortSha": "cd5c5c4",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T12:03:04-08:00",
+    "message": "Fix: Handle empty repositories and resolve HEAD in show command",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "1ea8c65d5fd89c71e35ab0f7f4a8a2a34bb91da2",
+    "shortSha": "1ea8c65",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T11:39:59-08:00",
+    "message": "Test: Adding test file to verify receipt capture",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 1,
+    "insertions": 1,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "da44c4e72d78c58455ae95b3fc1d5340b6c42e2f",
+    "shortSha": "da44c4e",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T11:20:53-08:00",
+    "message": "Fix: Update git log to use correct API for commit retrieval",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 2,
+    "insertions": 2,
+    "deletions": 6,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  },
+  {
+    "sha": "e334124172e7afc7dfb603490842325c7e018f97",
+    "shortSha": "e334124",
+    "author": "Piyush Gaikwad",
+    "email": "piyush.gaikwad@salesforce.com",
+    "timestamp": "2026-02-27T11:17:06-08:00",
+    "message": "Initial commit: Project setup and core implementation",
+    "branch": "main",
+    "aiAgent": null,
+    "confidence": null,
+    "filesChanged": 0,
+    "insertions": 0,
+    "deletions": 0,
+    "hasChatSummary": false,
+    "sessions": 0,
+    "tokens": null
+  }
+];
+    const chatSummaries = {};
 
     function esc(s){
       return String(s)
@@ -787,61 +906,61 @@ function generateDashboardHTML(
       const agentClass = commit.aiAgent ? commit.aiAgent : 'human';
       const agentLabel = commit.aiAgent === 'claude-code' ? 'Claude Code' :
                          commit.aiAgent === 'cursor' ? 'Cursor' : 'Human';
-      const confidenceText = commit.confidence ? \` \${(commit.confidence * 100).toFixed(0)}%\` : '';
+      const confidenceText = commit.confidence ? ` ${(commit.confidence * 100).toFixed(0)}%` : '';
 
       // Format tokens display
       let tokensDisplay = 'N/A';
       if (commit.tokens) {
         if (commit.tokens < 1000) {
-          tokensDisplay = \`\${commit.tokens} tokens\`;
+          tokensDisplay = `${commit.tokens} tokens`;
         } else {
-          tokensDisplay = \`\${(commit.tokens / 1000).toFixed(1)}k tokens\`;
+          tokensDisplay = `${(commit.tokens / 1000).toFixed(1)}k tokens`;
         }
       }
 
-      return \`
+      return `
         <div class="row">
           <div>
-            <div class="title">\${esc(commit.message)}</div>
+            <div class="title">${esc(commit.message)}</div>
             <div class="meta">
               <span class="hash">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M9 7a4 4 0 1 0 0 8h6a4 4 0 1 0 0-8H9Z" stroke="rgba(215,222,232,.55)" stroke-width="2"/>
                 </svg>
-                \${esc(commit.shortSha)}
+                ${esc(commit.shortSha)}
               </span>
               <span class="dot">•</span>
-              <span>\${formatDate(commit.timestamp)}</span>
+              <span>${formatDate(commit.timestamp)}</span>
               <span class="dot">•</span>
-              <span>\${esc(commit.author)}</span>
-              <span class="chip \${agentClass}">
-                <span class="b"></span>\${agentLabel}\${confidenceText}
+              <span>${esc(commit.author)}</span>
+              <span class="chip ${agentClass}">
+                <span class="b"></span>${agentLabel}${confidenceText}
               </span>
             </div>
-            \${commit.hasChatSummary ? \`
-              <button class="view-chat-btn" onclick="openChatModal('\${commit.sha}')">
+            ${commit.hasChatSummary ? `
+              <button class="view-chat-btn" onclick="openChatModal('${commit.sha}')">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                   <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.678 3.348-3.97z" clip-rule="evenodd" />
                 </svg>
                 View Chat
               </button>
-            \` : ''}
+            ` : ''}
           </div>
 
           <div class="rstats">
             <div class="diff">
-              <span class="plus">+\${commit.insertions}</span>
-              <span class="minus">-\${commit.deletions}</span>
-              <span class="files">\${commit.filesChanged} file\${commit.filesChanged !== 1 ? 's' : ''}</span>
+              <span class="plus">+${commit.insertions}</span>
+              <span class="minus">-${commit.deletions}</span>
+              <span class="files">${commit.filesChanged} file${commit.filesChanged !== 1 ? 's' : ''}</span>
             </div>
             <div class="sub">
-              <span>\${commit.sessions} session\${commit.sessions !== 1 ? 's' : ''}</span>
+              <span>${commit.sessions} session${commit.sessions !== 1 ? 's' : ''}</span>
               <span class="sep">·</span>
-              <span>\${tokensDisplay}</span>
+              <span>${tokensDisplay}</span>
             </div>
           </div>
         </div>
-      \`;
+      `;
     }
 
     function renderStats(){
@@ -851,36 +970,36 @@ function generateDashboardHTML(
       const cursorCommits = commits.filter(c => c.aiAgent === 'cursor').length;
 
       const statsGrid = document.getElementById('stats-grid');
-      statsGrid.innerHTML = \`
+      statsGrid.innerHTML = `
         <div class="card">
           <div class="card-inner">
             <div class="kicker">Total Commits</div>
-            <div class="big">\${totalCommits}</div>
+            <div class="big">${totalCommits}</div>
             <div class="small">All commits analyzed</div>
           </div>
         </div>
         <div class="card">
           <div class="card-inner">
             <div class="kicker">Human Commits</div>
-            <div class="big">\${humanCommits}</div>
+            <div class="big">${humanCommits}</div>
             <div class="small">Manually authored</div>
           </div>
         </div>
         <div class="card">
           <div class="card-inner">
             <div class="kicker">Claude Commits</div>
-            <div class="big">\${claudeCommits}</div>
+            <div class="big">${claudeCommits}</div>
             <div class="small">Claude Code assisted</div>
           </div>
         </div>
         <div class="card">
           <div class="card-inner">
             <div class="kicker">Cursor Commits</div>
-            <div class="big">\${cursorCommits}</div>
+            <div class="big">${cursorCommits}</div>
             <div class="small">Cursor AI assisted</div>
           </div>
         </div>
-      \`;
+      `;
     }
 
     function render(){
@@ -905,7 +1024,7 @@ function generateDashboardHTML(
         return;
       }
 
-      modalTitle.textContent = \`AI Chat History - \${commit.shortSha}\`;
+      modalTitle.textContent = `AI Chat History - ${commit.shortSha}`;
       modalBody.innerHTML = renderChatSummary(chatSummary);
       modal.classList.add('active');
     }
@@ -939,28 +1058,28 @@ function generateDashboardHTML(
         const roleClass = msg.role === 'user' ? 'user' : 'assistant';
         const roleLabel = msg.role === 'user' ? 'User' : 'Assistant';
 
-        html += \`
+        html += `
           <div class="message">
             <div class="message-header">
-              <div class="message-role \${roleClass}">\${roleLabel}</div>
-              <div class="message-time">\${time}</div>
+              <div class="message-role ${roleClass}">${roleLabel}</div>
+              <div class="message-time">${time}</div>
             </div>
-            <div class="message-content">\${escapeHtml(msg.content)}</div>
-            \${msg.tool_uses && msg.tool_uses.length > 0 ? \`
+            <div class="message-content">${escapeHtml(msg.content)}</div>
+            ${msg.tool_uses && msg.tool_uses.length > 0 ? `
               <div class="message-meta">
-                <div class="message-meta-item"><strong>Tools used:</strong> \${msg.tool_uses.join(', ')}</div>
+                <div class="message-meta-item"><strong>Tools used:</strong> ${msg.tool_uses.join(', ')}</div>
               </div>
-            \` : ''}
-            \${msg.files_modified && msg.files_modified.length > 0 ? \`
+            ` : ''}
+            ${msg.files_modified && msg.files_modified.length > 0 ? `
               <div class="message-meta">
-                <div class="message-meta-item"><strong>Files modified:</strong> \${msg.files_modified.length}</div>
-                \${msg.files_modified.slice(0, 3).map(f => \`<div class="message-meta-item">  • \${f}</div>\`).join('')}
-                \${msg.files_modified.length > 3 ? \`<div class="message-meta-item">  ... and \${msg.files_modified.length - 3} more</div>\` : ''}
+                <div class="message-meta-item"><strong>Files modified:</strong> ${msg.files_modified.length}</div>
+                ${msg.files_modified.slice(0, 3).map(f => `<div class="message-meta-item">  • ${f}</div>`).join('')}
+                ${msg.files_modified.length > 3 ? `<div class="message-meta-item">  ... and ${msg.files_modified.length - 3} more</div>` : ''}
               </div>
-            \` : ''}
-            \${msg.truncated ? '<div class="message-meta"><em>Content truncated</em></div>' : ''}
+            ` : ''}
+            ${msg.truncated ? '<div class="message-meta"><em>Content truncated</em></div>' : ''}
           </div>
-        \`;
+        `;
       });
 
       return html;
@@ -992,5 +1111,4 @@ function generateDashboardHTML(
     });
   </script>
 </body>
-</html>`;
-}
+</html>

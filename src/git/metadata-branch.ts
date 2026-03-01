@@ -4,7 +4,7 @@ import { join } from 'path';
 import { execSync } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { Receipt } from '../receipt/schema.js';
-import { ChatSummary } from '../receipt/chat-summary-schema.js';
+import { ChatSummary, safeValidateChatSummary } from '../receipt/chat-summary-schema.js';
 import { GitRepository } from './repo.js';
 import { ReceiptFilter } from './types.js';
 
@@ -413,6 +413,15 @@ Version: 1.0
    */
   async storeChatSummary(sha: string, chatSummary: ChatSummary): Promise<void> {
     try {
+      // Validate chat summary schema before storing
+      const validation = safeValidateChatSummary(chatSummary);
+
+      if (!validation.success) {
+        logger.error(`Chat summary validation failed for ${sha}:`);
+        logger.error(JSON.stringify(validation.error.errors, null, 2));
+        throw new Error('Chat summary schema validation failed');
+      }
+
       const summaryContent = JSON.stringify(chatSummary, null, 2);
       const summaryFileName = `${sha}.json`;
 

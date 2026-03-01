@@ -33,15 +33,42 @@ export class ChatSummaryGenerator {
         return null;
       }
 
+      logger.debug(`Reading session file: ${sessionFile}`);
+
       const content = await fs.readFile(sessionFile, 'utf8');
       const lines = content.split('\n').filter((l) => l.trim());
+      logger.debug(`Parsed ${lines.length} lines from session file`);
 
       const userPrompts: UserPrompt[] = [];
       const assistantResponses: AssistantResponse[] = [];
 
+      // Track token usage across all events
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      let totalCacheCreationTokens = 0;
+      let totalCacheReadTokens = 0;
+
       for (const line of lines) {
         try {
           const event = JSON.parse(line);
+
+          // Extract token usage if present (nested in message)
+          const usage = event.message?.usage;
+          if (usage) {
+            if (usage.input_tokens) {
+              totalInputTokens += usage.input_tokens;
+            }
+            if (usage.output_tokens) {
+              totalOutputTokens += usage.output_tokens;
+            }
+            if (usage.cache_creation_input_tokens) {
+              totalCacheCreationTokens += usage.cache_creation_input_tokens;
+            }
+            if (usage.cache_read_input_tokens) {
+              totalCacheReadTokens += usage.cache_read_input_tokens;
+            }
+            logger.debug(`Event ${event.type}: usage found - input:${usage.input_tokens || 0}, output:${usage.output_tokens || 0}, cache_create:${usage.cache_creation_input_tokens || 0}, cache_read:${usage.cache_read_input_tokens || 0}`);
+          }
 
           // Process user messages
           if (event.type === 'user' && event.message?.content) {
@@ -121,11 +148,25 @@ export class ChatSummaryGenerator {
         }
       }
 
+      // Build token usage summary
+      // Note: total_tokens represents actual consumed tokens (input + output)
+      // Cache tokens are tracked separately as they have different costs
+      const totalTokens = totalInputTokens + totalOutputTokens;
+      logger.debug(`Token extraction complete - Input: ${totalInputTokens}, Output: ${totalOutputTokens}, Cache Create: ${totalCacheCreationTokens}, Cache Read: ${totalCacheReadTokens}, Actual Total: ${totalTokens}`);
+
       const chatData: ChatData = {
         total_messages: userPrompts.length + assistantResponses.length,
         user_prompts: userPrompts,
         assistant_responses: assistantResponses,
+        token_usage: totalTokens > 0 ? {
+          input_tokens: totalInputTokens,
+          output_tokens: totalOutputTokens,
+          cache_creation_input_tokens: totalCacheCreationTokens,
+          cache_read_input_tokens: totalCacheReadTokens,
+          total_tokens: totalTokens,
+        } : undefined,
       };
+      logger.debug(`token_usage ${totalTokens > 0 ? 'INCLUDED' : 'EXCLUDED'} in chat data`);
 
       // Create chat summary without integrity hash first
       const summaryWithoutHash: Omit<ChatSummary, 'integrity_hash'> = {

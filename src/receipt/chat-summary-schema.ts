@@ -19,10 +19,19 @@ export const AssistantResponseSchema = z.object({
   files_modified: z.array(z.string()).optional(), // Files that were modified
 });
 
+export const TokenUsageSchema = z.object({
+  input_tokens: z.number().int().min(0), // Regular input tokens consumed
+  output_tokens: z.number().int().min(0), // Output tokens generated
+  cache_creation_input_tokens: z.number().int().min(0).optional(), // Tokens used to create prompt cache
+  cache_read_input_tokens: z.number().int().min(0).optional(), // Tokens read from prompt cache (cheaper)
+  total_tokens: z.number().int().min(0), // Sum of input_tokens + output_tokens (actual consumed)
+});
+
 export const ChatDataSchema = z.object({
   total_messages: z.number().int().min(0),
   user_prompts: z.array(UserPromptSchema),
   assistant_responses: z.array(AssistantResponseSchema),
+  token_usage: TokenUsageSchema.optional(),
 });
 
 export const ChatSummarySchema = z.object({
@@ -38,6 +47,7 @@ export const ChatSummarySchema = z.object({
 // Infer TypeScript types from schemas
 export type UserPrompt = z.infer<typeof UserPromptSchema>;
 export type AssistantResponse = z.infer<typeof AssistantResponseSchema>;
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
 export type ChatData = z.infer<typeof ChatDataSchema>;
 export type ChatSummary = z.infer<typeof ChatSummarySchema>;
 
