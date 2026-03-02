@@ -313,6 +313,7 @@ function generateDashboardHTML(
       gap:12px;
       grid-template-columns: repeat(4, 1fr);
       margin-bottom: 16px;
+      align-items: start;
     }
     @media (max-width: 1000px){
       .grid-4{grid-template-columns: repeat(2, 1fr)}
@@ -329,7 +330,7 @@ function generateDashboardHTML(
       box-shadow: 0 0 0 1px rgba(255,255,255,.06);
     }
     .card-inner{
-      padding:14px;
+      padding: 12px 14px;
     }
     .kicker{
       font-size:10px;
