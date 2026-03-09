@@ -8,6 +8,7 @@ AI Commit Ledger addresses the traceability and governance gap in AI-assisted de
 
 This tool provides a local-first solution that generates structured "AI Receipts" for each commit and stores them in a dedicated metadata branch (`ai/checkpoints/v1`) without polluting development branches.
 
+![Architecture](<Screenshot 2026-03-09 at 10.49.27 AM.png>)
 ## Key Features
 
 - **Automatic Receipt Generation**: Post-commit hooks capture AI activity
@@ -151,10 +152,8 @@ Example:
 ![Commit AILeger Receipt](<Screenshot 2026-03-09 at 12.05.28 PM.png>)
 ![Chat Receipt](<Screenshot 2026-03-09 at 12.07.40 PM.png>)
 
-3) ![CmmitLedger UI](<Screenshot 2026-03-09 at 11.04.02 AM.png>)
-
-
-
+2) All the info can be seen on the UI as well using commitLedger dashboard -b <branch> like below:
+![CmmitLedger UI](<Screenshot 2026-03-09 at 11.04.02 AM.png>)
 
 ## Development
 
