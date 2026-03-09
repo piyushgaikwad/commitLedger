@@ -177,16 +177,3 @@ npm run coverage
 # Build for production
 npm run build
 ```
-
-## Architecture
-
-See [docs/architecture.md](docs/architecture.md) for detailed architectural design.
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
