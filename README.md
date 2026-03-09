@@ -25,20 +25,27 @@ This tool provides a local-first solution that generates structured "AI Receipts
 4. **Incident investigation** - Understand AI intent and assumptions behind changes
 5. **AI governance enforcement** - Policy compliance for sensitive paths
 
-## Installation
-
-### via Homebrew (Recommended)
+### Manual Installation (Clone & Build)
 
 ```bash
-brew tap salesforce/commitledger
-brew install commitledger
+# Clone the repository
+git clone https://github.com/salesforce/commitLedger.git
+cd commitLedger
+
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+
+# Add to your PATH by editing ~/.zshrc
+echo 'export PATH="$PATH:/path/to/commitLedger/dist"' >> ~/.zshrc
+
+# Reload your shell configuration
+source ~/.zshrc
 ```
 
-### via npm
-
-```bash
-npm install -g @salesforce/commitledger
-```
+**Note**: Replace `/path/to/commitLedger` with the actual path where you cloned the repository.
 
 ### Verify Installation
 
