@@ -147,7 +147,13 @@ Example:
 
 ## CommitLedger Working
 
-1) ![CmmitLedger UI](<Screenshot 2026-03-09 at 11.04.02 AM.png>)
+1) When You commit, post-commit hook gets triggered and stores the AI sessions and creates a receipts like below
+![Commit AILeger Receipt](<Screenshot 2026-03-09 at 12.05.28 PM.png>)
+![Chat Receipt](<Screenshot 2026-03-09 at 12.07.40 PM.png>)
+
+3) ![CmmitLedger UI](<Screenshot 2026-03-09 at 11.04.02 AM.png>)
+
+
 
 
 ## Development
