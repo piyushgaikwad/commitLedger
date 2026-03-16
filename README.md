@@ -30,7 +30,7 @@ This tool provides a local-first solution that generates structured "AI Receipts
 
 ```bash
 # Clone the repository
-git clone https://github.com/salesforce/commitLedger.git
+clone the repo
 cd commitLedger
 
 # Install dependencies
