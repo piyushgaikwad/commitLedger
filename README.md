@@ -30,7 +30,7 @@ This tool provides a local-first solution that generates structured "AI Receipts
 
 ```bash
 # Clone the repository
-clone the repo
+git clone https://github.com/piyushgaikwad/commitLedger.git
 cd commitLedger
 
 # Install dependencies
@@ -39,14 +39,9 @@ npm install
 # Build the project
 npm run build
 
-# Add to your PATH by editing ~/.zshrc
-echo 'export PATH="$PATH:/path/to/commitLedger/dist"' >> ~/.zshrc
-
-# Reload your shell configuration
-source ~/.zshrc
+# Link the CLI globally
+npm link
 ```
-
-**Note**: Replace `/path/to/commitLedger` with the actual path where you cloned the repository.
 
 ### Verify Installation
 
@@ -157,7 +152,7 @@ Example:
 
 ```bash
 # Clone the repository
-Clone the repo
+git clone https://github.com/piyushgaikwad/commitLedger.git
 cd commitLedger
 
 # Install dependencies
